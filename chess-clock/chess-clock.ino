@@ -72,33 +72,28 @@ void loop() {
     switch (state_machine) {
     default:
     case STATES::BEGIN:
-        // initialize timers
         initialize_timers();
-        // update display
-        update_timer_display();
-        // update state
-        state_machine = STATES::READY;
+        update_w_timer_display();
+        update_b_timer_display();
+        change_state_to (STATES::READY);
         break;
 
     case STATES::READY:
-        // update display
-        update_timer_display();
-        // update state
-        state_machine = STATES::W_PLAYING;
+        update_w_timer_display();
+        update_b_timer_display();
+        change_state_to (STATES::B_PLAYING);
         break;
 
     case STATES::W_PLAYING:
         current_time = millis();
         w_time = w_total_time - (current_time - w_diff);
-        // update display
-        update_timer_display();
+        update_w_timer_display();
         break;
 
     case STATES::B_PLAYING:
         current_time = millis();
         b_time = b_total_time - (current_time - b_diff);
-        // update display
-        update_timer_display();
+        update_b_timer_display();
         break;
 
     case STATES::PAUSED:
@@ -111,6 +106,12 @@ void loop() {
     delay(100);
 }
 
+// change STATE MACHINE states
+void change_state_to (STATES final_state) {
+    state_machine = final_state;
+}
+
+// reset and initialize timers
 void initialize_timers() {
     // set time limits
     w_total_time = sel_play_time;
@@ -129,7 +130,12 @@ void initialize_timers() {
     pause_time = 0;
 }
 
+// convert time (in ms) to 4 digit BCD
 void convert_time_to_clock(long time, uint8_t clock[]) {
+    if (time < 0) {
+        time = 0;
+    }
+
     long minute = (time / 1000) / 60;
     long second = (time / 1000) % 60;
 
@@ -143,15 +149,26 @@ void convert_time_to_clock(long time, uint8_t clock[]) {
     clock[3] = second % 10;
 }
 
-void update_timer_display() {
+// update white remaining time on display
+void update_w_timer_display() {
     convert_time_to_clock(w_time, w_timer_data);
+
+    // convert BCD to 7 segment digits
     w_timer_data[0] = w_timer_display.encodeDigit(w_timer_data[0]);
     w_timer_data[1] = w_timer_display.encodeDigit(w_timer_data[1]) | 0x80;
     // w_timer_data[1] = w_timer_display.encodeDigit(w_timer_data[1]);
     w_timer_data[2] = w_timer_display.encodeDigit(w_timer_data[2]);
     w_timer_data[3] = w_timer_display.encodeDigit(w_timer_data[3]);
 
+    // refresh LED segment display
+    w_timer_display.setSegments(w_timer_data, 4, 0);
+}
+
+// update black remaining time on display
+void update_b_timer_display() {
     convert_time_to_clock(b_time, b_timer_data);
+
+    // convert BCD to 7 segment digits
     b_timer_data[0] = b_timer_display.encodeDigit(b_timer_data[0]);
     b_timer_data[1] = b_timer_display.encodeDigit(b_timer_data[1]) | 0x80;
     // b_timer_data[1] = b_timer_display.encodeDigit(b_timer_data[1]);
@@ -159,14 +176,13 @@ void update_timer_display() {
     b_timer_data[3] = b_timer_display.encodeDigit(b_timer_data[3]);
 
     // refresh LED segment display
-    w_timer_display.setSegments(w_timer_data, 4, 0);
     b_timer_display.setSegments(b_timer_data, 4, 0);
-    // TM1637RefreshStart = true;
-    // TM1637RefreshFlag = false;
 }
 
+// ISR for white 'move complete' button
 void white_move() {
 }
 
+// ISR for black 'move complete' button
 void black_move() {
 }
