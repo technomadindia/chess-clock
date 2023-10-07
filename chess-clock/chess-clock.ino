@@ -75,13 +75,14 @@ void setup() {
 
 // the loop function runs over and over again forever
 void loop() {
+    // capture external input status
     start_pause_button_state = digitalRead(START_PAUSE_PIN);
     mode_change_button_state = digitalRead(KNOB1_SW_PIN);
 
     switch (state_machine) {
     default:
     case STATES::BEGIN:
-        initialize_timers();
+        init_time_limits();
         change_state_to(STATES::READY);
         break;
 
@@ -90,6 +91,7 @@ void loop() {
         update_b_timer_display();
 
         if (HIGH == start_pause_button_state) {
+            init_timers();
             change_state_to(STATES::W_PLAYING);
         }
         break;
@@ -139,9 +141,8 @@ void change_state_to(STATES final_state) {
     state_machine = final_state;
 }
 
-// reset and initialize timers
-void initialize_timers() {
-    // set time limits
+// initialize game time limits
+void init_time_limits() {
     w_total_time = sel_play_time;
     b_total_time = sel_play_time;
     bonus_time = sel_bonus_time;
@@ -149,8 +150,10 @@ void initialize_timers() {
     b_time = b_total_time;
     w_moves = 0;
     b_moves = 0;
+}
 
-    // init timers
+// initialize timers
+void init_timers() {
     current_time = millis();
     w_diff = current_time;
     b_diff = current_time;
@@ -184,7 +187,6 @@ void update_w_timer_display() {
     // convert BCD to 7 segment digits
     w_timer_data[0] = w_timer_display.encodeDigit(w_timer_data[0]);
     w_timer_data[1] = w_timer_display.encodeDigit(w_timer_data[1]) | 0x80;
-    // w_timer_data[1] = w_timer_display.encodeDigit(w_timer_data[1]);
     w_timer_data[2] = w_timer_display.encodeDigit(w_timer_data[2]);
     w_timer_data[3] = w_timer_display.encodeDigit(w_timer_data[3]);
 
@@ -199,7 +201,6 @@ void update_b_timer_display() {
     // convert BCD to 7 segment digits
     b_timer_data[0] = b_timer_display.encodeDigit(b_timer_data[0]);
     b_timer_data[1] = b_timer_display.encodeDigit(b_timer_data[1]) | 0x80;
-    // b_timer_data[1] = b_timer_display.encodeDigit(b_timer_data[1]);
     b_timer_data[2] = b_timer_display.encodeDigit(b_timer_data[2]);
     b_timer_data[3] = b_timer_display.encodeDigit(b_timer_data[3]);
 
@@ -209,10 +210,14 @@ void update_b_timer_display() {
 
 // ISR for white 'move complete' button
 void white_move_button_event() {
-    white_move_button_state = HIGH;
+    if (STATES::W_PLAYING == state_machine) {
+        white_move_button_state = HIGH;
+    }
 }
 
 // ISR for black 'move complete' button
 void black_move_button_event() {
-    black_move_button_state = HIGH;
+    if (STATES::B_PLAYING == state_machine) {
+        black_move_button_state = HIGH;
+    }
 }
