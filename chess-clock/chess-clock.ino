@@ -18,15 +18,17 @@ enum STATES { BEGIN,
               READY,
               W_PLAYING,
               B_PLAYING,
-              PAUSED,
-              END,
-              PLAY_CONFIG,
-              BONUS_CONFIG };
+              W_PAUSED,
+              B_PAUSED,
+              W_END,
+              B_END,
+              BASE_TIME_CONFIG,
+              BONUS_TIME_CONFIG };
 const uint8_t TIMER_SEG_CLEAR[] = {0x00, 0x00, 0x00, 0x00};
 
 // data
 STATES state_machine = STATES::BEGIN;
-long sel_play_time = 600000; // milli seconds
+long sel_base_time = 600000; // all time in milliseconds
 long sel_bonus_time = 10000;
 long current_time = 0;
 long w_total_time = 0;
@@ -43,9 +45,11 @@ long play_time = 0;
 
 // input states
 int start_pause_button_state = LOW;
+int start_pause_button_prev_state = LOW;
 int white_move_button_state = LOW;
 int black_move_button_state = LOW;
 int mode_change_button_state = LOW;
+int mode_change_button_prev_state = LOW;
 
 // create module object instances
 TM1637Display w_timer_display(W_TIMER_CLK_PIN, W_TIMER_DIO_PIN);
@@ -90,7 +94,8 @@ void loop() {
         update_w_timer_display();
         update_b_timer_display();
 
-        if (HIGH == start_pause_button_state) {
+        // start the game
+        if (HIGH == start_pause_button_state && LOW == start_pause_button_prev_state) {
             init_timers();
             change_state_to(STATES::W_PLAYING);
         }
@@ -98,6 +103,7 @@ void loop() {
 
     case STATES::W_PLAYING:
         current_time = millis();
+        // complete white move
         if (HIGH == white_move_button_state) {
             b_diff += current_time - play_time;
             play_time = current_time;
@@ -109,10 +115,17 @@ void loop() {
             w_time = w_total_time - (current_time - w_diff);
         }
         update_w_timer_display();
+
+        // pause game at white move
+        if (HIGH == start_pause_button_state && LOW == start_pause_button_prev_state) {
+            pause_time = millis();
+            change_state_to(STATES::W_PAUSED);
+        }
         break;
 
     case STATES::B_PLAYING:
         current_time = millis();
+        // complete black move
         if (HIGH == black_move_button_state) {
             w_diff += current_time - play_time;
             play_time = current_time;
@@ -124,15 +137,44 @@ void loop() {
             b_time = b_total_time - (current_time - b_diff);
         }
         update_b_timer_display();
+
+        // pause game at black move
+        if (HIGH == start_pause_button_state && LOW == start_pause_button_prev_state) {
+            pause_time = millis();
+            change_state_to(STATES::B_PAUSED);
+        }
         break;
 
-    case STATES::PAUSED:
+    case STATES::W_PAUSED:
+        // unpause white move
+        if (HIGH == start_pause_button_state && LOW == start_pause_button_prev_state) {
+            current_time = millis();
+            w_diff += current_time - pause_time;
+            change_state_to(STATES::W_PLAYING);
+        }
         break;
 
-    case STATES::END:
+    case STATES::B_PAUSED:
+        // unpause black move
+        if (HIGH == start_pause_button_state && LOW == start_pause_button_prev_state) {
+            current_time = millis();
+            b_diff += current_time - pause_time;
+            change_state_to(STATES::B_PLAYING);
+        }
+        break;
+
+    case STATES::W_END:
+        break;
+
+    case STATES::B_END:
         break;
     }
 
+    // save current input status to detect change
+    start_pause_button_prev_state = start_pause_button_state;
+    mode_change_button_prev_state = mode_change_button_state;
+
+    // rate limit iterations
     delay(100);
 }
 
@@ -143,8 +185,8 @@ void change_state_to(STATES final_state) {
 
 // initialize game time limits
 void init_time_limits() {
-    w_total_time = sel_play_time;
-    b_total_time = sel_play_time;
+    w_total_time = sel_base_time;
+    b_total_time = sel_base_time;
     bonus_time = sel_bonus_time;
     w_time = w_total_time;
     b_time = b_total_time;
@@ -158,7 +200,6 @@ void init_timers() {
     w_diff = current_time;
     b_diff = current_time;
     play_time = current_time;
-    pause_time = 0;
 }
 
 // convert time (in ms) to 4 digit BCD
