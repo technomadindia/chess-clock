@@ -25,6 +25,16 @@ enum STATES { BEGIN,
               BASE_TIME_CONFIG,
               BONUS_TIME_CONFIG };
 const uint8_t TIMER_SEG_CLEAR[] = {0x00, 0x00, 0x00, 0x00};
+const uint8_t TIMER_SEG_LOSE[] = {
+    SEG_D | SEG_E | SEG_F,
+    SEG_A | SEG_B | SEG_C | SEG_D | SEG_E | SEG_F,
+    SEG_A | SEG_C | SEG_D | SEG_F | SEG_G,
+    SEG_A | SEG_D | SEG_E | SEG_F | SEG_G};
+const uint8_t TIMER_SEG_END[] = {
+    SEG_A | SEG_D | SEG_E | SEG_F | SEG_G,
+    SEG_C | SEG_E | SEG_G,
+    SEG_B | SEG_C | SEG_D | SEG_E | SEG_G,
+    0x00};
 
 // data
 STATES state_machine = STATES::BEGIN;
@@ -77,6 +87,20 @@ void setup() {
     pinMode(ALERT_PIN, OUTPUT);
 }
 
+// ISR for white 'move complete' button
+void white_move_button_event() {
+    if (STATES::W_PLAYING == state_machine) {
+        white_move_button_state = HIGH;
+    }
+}
+
+// ISR for black 'move complete' button
+void black_move_button_event() {
+    if (STATES::B_PLAYING == state_machine) {
+        black_move_button_state = HIGH;
+    }
+}
+
 // the loop function runs over and over again forever
 void loop() {
     // capture external input status
@@ -91,8 +115,8 @@ void loop() {
         break;
 
     case STATES::READY:
-        update_w_timer_display();
-        update_b_timer_display();
+        update_w_timer_display(w_time);
+        update_b_timer_display(b_time);
 
         // start the game
         if (HIGH == start_pause_button_state && LOW == start_pause_button_prev_state) {
@@ -114,12 +138,17 @@ void loop() {
         } else {
             w_time = w_total_time - (current_time - w_diff);
         }
-        update_w_timer_display();
+        update_w_timer_display(w_time);
 
         // pause game at white move
         if (HIGH == start_pause_button_state && LOW == start_pause_button_prev_state) {
             pause_time = millis();
             change_state_to(STATES::W_PAUSED);
+        }
+
+        // white timeout => black wins
+        if (w_time <= 0) {
+            change_state_to(STATES::W_END);
         }
         break;
 
@@ -136,12 +165,17 @@ void loop() {
         } else {
             b_time = b_total_time - (current_time - b_diff);
         }
-        update_b_timer_display();
+        update_b_timer_display(b_time);
 
         // pause game at black move
         if (HIGH == start_pause_button_state && LOW == start_pause_button_prev_state) {
             pause_time = millis();
             change_state_to(STATES::B_PAUSED);
+        }
+
+        // black timeout => white wins
+        if (b_time <= 0) {
+            change_state_to(STATES::B_END);
         }
         break;
 
@@ -164,9 +198,13 @@ void loop() {
         break;
 
     case STATES::W_END:
+        // print white lose message
+        w_timer_display.setSegments(TIMER_SEG_END);
         break;
 
     case STATES::B_END:
+        // print black lose message
+        b_timer_display.setSegments(TIMER_SEG_END);
         break;
     }
 
@@ -222,8 +260,8 @@ void convert_time_to_clock(long time, uint8_t clock[]) {
 }
 
 // update white remaining time on display
-void update_w_timer_display() {
-    convert_time_to_clock(w_time, w_timer_data);
+void update_w_timer_display(long time) {
+    convert_time_to_clock(time, w_timer_data);
 
     // convert BCD to 7 segment digits
     w_timer_data[0] = w_timer_display.encodeDigit(w_timer_data[0]);
@@ -236,8 +274,8 @@ void update_w_timer_display() {
 }
 
 // update black remaining time on display
-void update_b_timer_display() {
-    convert_time_to_clock(b_time, b_timer_data);
+void update_b_timer_display(long time) {
+    convert_time_to_clock(time, b_timer_data);
 
     // convert BCD to 7 segment digits
     b_timer_data[0] = b_timer_display.encodeDigit(b_timer_data[0]);
@@ -247,18 +285,4 @@ void update_b_timer_display() {
 
     // refresh LED segment display
     b_timer_display.setSegments(b_timer_data, 4, 0);
-}
-
-// ISR for white 'move complete' button
-void white_move_button_event() {
-    if (STATES::W_PLAYING == state_machine) {
-        white_move_button_state = HIGH;
-    }
-}
-
-// ISR for black 'move complete' button
-void black_move_button_event() {
-    if (STATES::B_PLAYING == state_machine) {
-        black_move_button_state = HIGH;
-    }
 }
