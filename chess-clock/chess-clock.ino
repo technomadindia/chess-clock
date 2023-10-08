@@ -36,11 +36,21 @@ const uint8_t TIMER_SEG_END[] = {
     SEG_B | SEG_C | SEG_D | SEG_E | SEG_G,
     0x00};
 const int ALERT_DURATION = 1000;
+const long BASE_TIME_OPTIONS[] = { // all time measured in milliseconds
+    60000, 120000, 180000, 300000, 600000, 900000,
+    1200000, 1800000, 2700000, 3600000, 4500000, 5400000};
+const int NUM_BASE_TIME_OPTIONS = 12;
+const long BONUS_TIME_OPTIONS[] = {
+    0, 1000, 2000, 3000, 5000, 10000, 15000,
+    20000, 30000, 45000, 60000, 75000};
+const int NUM_BONUS_TIME_OPTIONS = 12;
 
 // data
 STATES state_machine = STATES::BEGIN;
-long sel_base_time = 600000; // all time in milliseconds
-long sel_bonus_time = 10000;
+int selected_base_time_pos = 4;
+int selected_bonus_time_pos = 0;
+long selected_base_time = BASE_TIME_OPTIONS[selected_base_time_pos];
+long selected_bonus_time = BONUS_TIME_OPTIONS[selected_bonus_time_pos];
 long current_time = 0;
 long w_total_time = 0;
 long b_total_time = 0;
@@ -62,6 +72,8 @@ int white_move_button_state = LOW;
 int black_move_button_state = LOW;
 int mode_change_button_state = LOW;
 int mode_change_button_prev_state = LOW;
+int config_knob_clk_state = LOW;
+int config_knob_dt_state = LOW;
 
 // create module object instances
 TM1637Display w_timer_display(W_TIMER_CLK_PIN, W_TIMER_DIO_PIN);
@@ -85,6 +97,7 @@ void setup() {
     pinMode(START_PAUSE_PIN, INPUT);
     pinMode(KNOB1_SW_PIN, INPUT);
     pinMode(KNOB1_CLK_PIN, INPUT);
+    attachInterrupt(digitalPinToInterrupt(KNOB1_CLK_PIN), knob1_clk_event, RISING);
     pinMode(KNOB1_DT_PIN, INPUT);
     pinMode(ALERT_PIN, OUTPUT);
 }
@@ -102,6 +115,27 @@ void setup() {
         black_move_button_state = HIGH;
     }
 } */
+
+// ISR for 'knob1 rotate' event
+void knob1_clk_event() {
+    if (STATES::BASE_TIME_CONFIG == state_machine) {
+        config_knob_clk_state = digitalRead(KNOB1_CLK_PIN);
+        config_knob_dt_state = digitalRead(KNOB1_DT_PIN);
+        if (config_knob_dt_state != config_knob_clk_state) {
+            selected_base_time_pos++;
+        } else {
+            selected_base_time_pos--;
+        }
+    } else if (STATES::BONUS_TIME_CONFIG == state_machine) {
+        config_knob_clk_state = digitalRead(KNOB1_CLK_PIN);
+        config_knob_dt_state = digitalRead(KNOB1_DT_PIN);
+        if (config_knob_dt_state != config_knob_clk_state) {
+            selected_bonus_time_pos++;
+        } else {
+            selected_bonus_time_pos--;
+        }
+    }
+}
 
 // the loop function runs over and over again forever
 void loop() {
@@ -126,6 +160,13 @@ void loop() {
         if (HIGH == start_pause_button_state && LOW == start_pause_button_prev_state) {
             init_timers();
             change_state_to(STATES::W_PLAYING);
+        }
+
+        // change mode
+        if (HIGH == mode_change_button_state && LOW == mode_change_button_prev_state) {
+            update_w_timer_display(selected_base_time);
+            update_b_timer_display(selected_bonus_time);
+            change_state_to(STATES::BASE_TIME_CONFIG);
         }
         break;
 
@@ -214,6 +255,37 @@ void loop() {
         b_timer_display.setSegments(TIMER_SEG_END);
         alert_stop();
         break;
+
+    case STATES::BASE_TIME_CONFIG:
+        if (selected_base_time_pos >= NUM_BASE_TIME_OPTIONS) {
+            selected_base_time_pos %= NUM_BASE_TIME_OPTIONS;
+        } else if (selected_base_time_pos < 0) {
+            selected_base_time_pos += NUM_BASE_TIME_OPTIONS;
+        }
+
+        selected_base_time = BASE_TIME_OPTIONS[selected_base_time_pos];
+        update_w_timer_display(selected_base_time);
+
+        if (HIGH == mode_change_button_state && LOW == mode_change_button_prev_state) {
+            change_state_to(STATES::BONUS_TIME_CONFIG);
+        }
+        break;
+
+    case STATES::BONUS_TIME_CONFIG:
+        if (selected_bonus_time_pos >= NUM_BONUS_TIME_OPTIONS) {
+            selected_bonus_time_pos %= NUM_BONUS_TIME_OPTIONS;
+        } else if (selected_bonus_time_pos < 0) {
+            selected_bonus_time_pos += NUM_BONUS_TIME_OPTIONS;
+        }
+
+        selected_bonus_time = BONUS_TIME_OPTIONS[selected_bonus_time_pos];
+        update_b_timer_display(selected_bonus_time);
+
+        if (HIGH == mode_change_button_state && LOW == mode_change_button_prev_state) {
+            init_time_limits();
+            change_state_to(STATES::READY);
+        }
+        break;
     }
 
     // save current input status to detect change
@@ -231,9 +303,9 @@ void change_state_to(STATES final_state) {
 
 // initialize game time limits
 void init_time_limits() {
-    w_total_time = sel_base_time;
-    b_total_time = sel_base_time;
-    bonus_time = sel_bonus_time;
+    w_total_time = selected_base_time;
+    b_total_time = selected_base_time;
+    bonus_time = selected_bonus_time;
     w_time = w_total_time;
     b_time = b_total_time;
     w_moves = 0;
@@ -248,11 +320,13 @@ void init_timers() {
     play_time = current_time;
 }
 
+// activate alert buzzer
 void alert_start() {
     alert_time = millis();
     digitalWrite(ALERT_PIN, HIGH);
 }
 
+// deactivate alert buzzer after set duration
 void alert_stop() {
     current_time = millis();
     if (current_time - alert_time > ALERT_DURATION) {
