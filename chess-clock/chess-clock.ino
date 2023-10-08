@@ -35,6 +35,7 @@ const uint8_t TIMER_SEG_END[] = {
     SEG_C | SEG_E | SEG_G,
     SEG_B | SEG_C | SEG_D | SEG_E | SEG_G,
     0x00};
+const int ALERT_DURATION = 1000;
 
 // data
 STATES state_machine = STATES::BEGIN;
@@ -52,6 +53,7 @@ long w_diff = 0;
 long b_diff = 0;
 long pause_time = 0;
 long play_time = 0;
+long alert_time = 0;
 
 // input states
 int start_pause_button_state = LOW;
@@ -148,6 +150,7 @@ void loop() {
 
         // white timeout => black wins
         if (w_time <= 0) {
+            alert_start();
             change_state_to(STATES::W_END);
         }
         break;
@@ -175,6 +178,7 @@ void loop() {
 
         // black timeout => white wins
         if (b_time <= 0) {
+            alert_start();
             change_state_to(STATES::B_END);
         }
         break;
@@ -200,11 +204,13 @@ void loop() {
     case STATES::W_END:
         // print white lose message
         w_timer_display.setSegments(TIMER_SEG_END);
+        alert_stop();
         break;
 
     case STATES::B_END:
         // print black lose message
         b_timer_display.setSegments(TIMER_SEG_END);
+        alert_stop();
         break;
     }
 
@@ -238,6 +244,19 @@ void init_timers() {
     w_diff = current_time;
     b_diff = current_time;
     play_time = current_time;
+}
+
+void alert_start() {
+    alert_time = millis();
+    digitalWrite(ALERT_PIN, HIGH);
+}
+
+void alert_stop() {
+    current_time = millis();
+    if (current_time - alert_time > ALERT_DURATION) {
+        alert_time = 0;
+        digitalWrite(ALERT_PIN, LOW);
+    }
 }
 
 // convert time (in ms) to 4 digit BCD
