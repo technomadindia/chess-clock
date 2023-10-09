@@ -79,29 +79,13 @@ void setup() {
 
     // initialize I/O pins
     pinMode(WHITE_MOVE_PIN, INPUT);
-    // attachInterrupt(digitalPinToInterrupt(WHITE_MOVE_PIN), white_move_button_event, RISING);
     pinMode(BLACK_MOVE_PIN, INPUT);
-    // attachInterrupt(digitalPinToInterrupt(BLACK_MOVE_PIN), black_move_button_event, RISING);
     pinMode(START_PAUSE_PIN, INPUT);
     pinMode(KNOB1_SW_PIN, INPUT);
     pinMode(KNOB1_CLK_PIN, INPUT);
     pinMode(KNOB1_DT_PIN, INPUT);
     pinMode(ALERT_PIN, OUTPUT);
 }
-
-// ISR for white 'move complete' button
-/* void white_move_button_event() {
-    if (STATES::W_PLAYING == state_machine) {
-        white_move_button_state = HIGH;
-    }
-} */
-
-// ISR for black 'move complete' button
-/* void black_move_button_event() {
-    if (STATES::B_PLAYING == state_machine) {
-        black_move_button_state = HIGH;
-    }
-} */
 
 // the loop function runs over and over again forever
 void loop() {
@@ -138,7 +122,6 @@ void loop() {
             // w_total_time += bonus_time;
             w_time = w_total_time - (current_time - w_diff);
             change_state_to(STATES::B_PLAYING);
-            // white_move_button_state = LOW;
         } else {
             w_time = w_total_time - (current_time - w_diff);
         }
@@ -166,7 +149,6 @@ void loop() {
             // b_total_time += bonus_time;
             b_time = b_total_time - (current_time - b_diff);
             change_state_to(STATES::W_PLAYING);
-            // black_move_button_state = LOW;
         } else {
             b_time = b_total_time - (current_time - b_diff);
         }
