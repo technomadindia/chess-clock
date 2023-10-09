@@ -46,11 +46,11 @@ const unsigned long BONUS_TIME_OPTIONS[] = {
     20000, 30000, 45000, 60000, 75000};
 const int NUM_BONUS_TIME_OPTIONS = 12;
 const byte BONUS_METHOD_OPTIONS[] = {
-    SEG_A | SEG_E | SEG_F | SEG_G,         // 'F': fischer increament method
-    SEG_C | SEG_D | SEG_E | SEG_F | SEG_G, // 'b': bronstein delay method
-    SEG_B | SEG_C | SEG_D | SEG_E | SEG_G, // 'd': simple delay method
+    SEG_A | SEG_E | SEG_F | SEG_G,         // [0] = 'F': Fischer increament method
+    SEG_C | SEG_D | SEG_E | SEG_F | SEG_G, // [1] = 'b': Bronstein delay method
+    //    SEG_B | SEG_C | SEG_D | SEG_E | SEG_G, // [2] = 'd': simple delay method
 };
-const int NUM_BONUS_METHOD_OPTIONS = 3;
+const int NUM_BONUS_METHOD_OPTIONS = 2;
 
 // data
 STATES state_machine = STATES::BEGIN;
@@ -73,6 +73,7 @@ unsigned long w_diff = 0;
 unsigned long b_diff = 0;
 unsigned long pause_time = 0;
 unsigned long play_time = 0;
+unsigned long play_duration = 0;
 unsigned long alert_time = 0;
 
 // input states
@@ -270,9 +271,14 @@ void loop() {
         current_time = millis();
         // complete white move
         if (HIGH == white_move_button_state) {
-            b_diff += current_time - play_time;
+            play_duration = current_time - play_time;
+            b_diff += play_duration;
             play_time = current_time;
-            // w_total_time += bonus_time;
+            if (0 == selected_bonus_method_pos) { // Fischer increment
+                w_total_time += bonus_time;
+            } else if (1 == selected_bonus_method_pos) { // Bronstein delay
+                w_total_time += min(play_duration, bonus_time);
+            }
             w_time = w_total_time - (current_time - w_diff);
             change_state_to(STATES::B_PLAYING);
         } else {
@@ -297,9 +303,14 @@ void loop() {
         current_time = millis();
         // complete black move
         if (HIGH == black_move_button_state) {
-            w_diff += current_time - play_time;
+            play_duration = current_time - play_time;
+            w_diff += play_duration;
             play_time = current_time;
-            // b_total_time += bonus_time;
+            if (0 == selected_bonus_method_pos) { // Fischer increment
+                b_total_time += bonus_time;
+            } else if (1 == selected_bonus_method_pos) { // Bronstein delay
+                b_total_time += min(play_duration, bonus_time);
+            }
             b_time = b_total_time - (current_time - b_diff);
             change_state_to(STATES::W_PLAYING);
         } else {
