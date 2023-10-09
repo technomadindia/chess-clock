@@ -36,11 +36,11 @@ const uint8_t TIMER_SEG_END[] = {
     SEG_B | SEG_C | SEG_D | SEG_E | SEG_G,
     0x00};
 const int ALERT_DURATION = 1000;
-const long BASE_TIME_OPTIONS[] = { // all time measured in milliseconds
+const unsigned long BASE_TIME_OPTIONS[] = { // all time measured in milliseconds
     60000, 120000, 180000, 300000, 600000, 900000,
     1200000, 1800000, 2700000, 3600000, 4500000, 5400000};
 const int NUM_BASE_TIME_OPTIONS = 12;
-const long BONUS_TIME_OPTIONS[] = {
+const unsigned long BONUS_TIME_OPTIONS[] = {
     0, 1000, 2000, 3000, 5000, 10000, 15000,
     20000, 30000, 45000, 60000, 75000};
 const int NUM_BONUS_TIME_OPTIONS = 12;
@@ -49,21 +49,21 @@ const int NUM_BONUS_TIME_OPTIONS = 12;
 STATES state_machine = STATES::BEGIN;
 int selected_base_time_pos = 4;
 int selected_bonus_time_pos = 0;
-long selected_base_time = BASE_TIME_OPTIONS[selected_base_time_pos];
-long selected_bonus_time = BONUS_TIME_OPTIONS[selected_bonus_time_pos];
-long current_time = 0;
-long w_total_time = 0;
-long b_total_time = 0;
-long bonus_time = 0;
-long w_time = 0;
-long b_time = 0;
+unsigned long selected_base_time = BASE_TIME_OPTIONS[selected_base_time_pos];
+unsigned long selected_bonus_time = BONUS_TIME_OPTIONS[selected_bonus_time_pos];
+unsigned long current_time = 0;
+unsigned long w_total_time = 0;
+unsigned long b_total_time = 0;
+unsigned long bonus_time = 0;
+unsigned long w_time = 0;
+unsigned long b_time = 0;
 uint8_t w_moves = 0;
 uint8_t b_moves = 0;
-long w_diff = 0;
-long b_diff = 0;
-long pause_time = 0;
-long play_time = 0;
-long alert_time = 0;
+unsigned long w_diff = 0;
+unsigned long b_diff = 0;
+unsigned long pause_time = 0;
+unsigned long play_time = 0;
+unsigned long alert_time = 0;
 
 // input states
 int start_pause_button_state = LOW;
@@ -72,6 +72,7 @@ int white_move_button_state = LOW;
 int black_move_button_state = LOW;
 int mode_change_button_state = LOW;
 int mode_change_button_prev_state = LOW;
+bool knob_input_enable = true;
 int config_knob_clk_state = LOW;
 int config_knob_dt_state = LOW;
 
@@ -118,21 +119,23 @@ void setup() {
 
 // ISR for 'knob1 rotate' event
 void knob1_clk_event() {
-    if (STATES::BASE_TIME_CONFIG == state_machine) {
-        config_knob_clk_state = digitalRead(KNOB1_CLK_PIN);
-        config_knob_dt_state = digitalRead(KNOB1_DT_PIN);
-        if (config_knob_dt_state != config_knob_clk_state) {
-            selected_base_time_pos++;
-        } else {
-            selected_base_time_pos--;
-        }
-    } else if (STATES::BONUS_TIME_CONFIG == state_machine) {
-        config_knob_clk_state = digitalRead(KNOB1_CLK_PIN);
-        config_knob_dt_state = digitalRead(KNOB1_DT_PIN);
-        if (config_knob_dt_state != config_knob_clk_state) {
-            selected_bonus_time_pos++;
-        } else {
-            selected_bonus_time_pos--;
+    if (knob_input_enable) {
+        if (STATES::BASE_TIME_CONFIG == state_machine) {
+            if (HIGH == digitalRead(KNOB1_DT_PIN)) { // if enc B pulse precedes enc A pulse
+                selected_base_time_pos++;
+            } else { // if enc A pulse precedes enc B pulse
+                selected_base_time_pos--;
+            }
+
+            knob_input_enable = false; // block input till event is handled
+        } else if (STATES::BONUS_TIME_CONFIG == state_machine) {
+            if (HIGH == digitalRead(KNOB1_DT_PIN)) { // if enc B pulse precedes enc A pulse
+                selected_bonus_time_pos++;
+            } else { // if enc A pulse precedes enc B pulse
+                selected_bonus_time_pos--;
+            }
+
+            knob_input_enable = false; // block input till event is handled
         }
     }
 }
@@ -257,30 +260,40 @@ void loop() {
         break;
 
     case STATES::BASE_TIME_CONFIG:
-        if (selected_base_time_pos >= NUM_BASE_TIME_OPTIONS) {
-            selected_base_time_pos %= NUM_BASE_TIME_OPTIONS;
-        } else if (selected_base_time_pos < 0) {
-            selected_base_time_pos += NUM_BASE_TIME_OPTIONS;
+        if (!knob_input_enable) {
+            // circular indices
+            if (selected_base_time_pos >= NUM_BASE_TIME_OPTIONS) { // handle overflow
+                selected_base_time_pos %= NUM_BASE_TIME_OPTIONS;
+            } else if (selected_base_time_pos < 0) { // handle underflow
+                selected_base_time_pos += NUM_BASE_TIME_OPTIONS;
+            }
+
+            selected_base_time = BASE_TIME_OPTIONS[selected_base_time_pos];
+            update_w_timer_display(selected_base_time);
+            knob_input_enable = true; // re-enable input interrupt
         }
 
-        selected_base_time = BASE_TIME_OPTIONS[selected_base_time_pos];
-        update_w_timer_display(selected_base_time);
-
+        // change mode
         if (HIGH == mode_change_button_state && LOW == mode_change_button_prev_state) {
             change_state_to(STATES::BONUS_TIME_CONFIG);
         }
         break;
 
     case STATES::BONUS_TIME_CONFIG:
-        if (selected_bonus_time_pos >= NUM_BONUS_TIME_OPTIONS) {
-            selected_bonus_time_pos %= NUM_BONUS_TIME_OPTIONS;
-        } else if (selected_bonus_time_pos < 0) {
-            selected_bonus_time_pos += NUM_BONUS_TIME_OPTIONS;
+        if (!knob_input_enable) {
+            // circular indices
+            if (selected_bonus_time_pos >= NUM_BONUS_TIME_OPTIONS) { // handle overflow
+                selected_bonus_time_pos %= NUM_BONUS_TIME_OPTIONS;
+            } else if (selected_bonus_time_pos < 0) { // handle underflow
+                selected_bonus_time_pos += NUM_BONUS_TIME_OPTIONS;
+            }
+
+            selected_bonus_time = BONUS_TIME_OPTIONS[selected_bonus_time_pos];
+            update_b_timer_display(selected_bonus_time);
+            knob_input_enable = true; // re-enable input interrupt
         }
 
-        selected_bonus_time = BONUS_TIME_OPTIONS[selected_bonus_time_pos];
-        update_b_timer_display(selected_bonus_time);
-
+        // change mode
         if (HIGH == mode_change_button_state && LOW == mode_change_button_prev_state) {
             init_time_limits();
             change_state_to(STATES::READY);
@@ -341,8 +354,8 @@ void convert_time_to_clock(long time, uint8_t clock[]) {
         time = 0;
     }
 
-    long minute = (time / 1000) / 60;
-    long second = (time / 1000) % 60;
+    unsigned long minute = (time / 1000) / 60;
+    unsigned long second = (time / 1000) % 60;
 
     if (minute > 99) { // TODO: fix this temporary hack
         minute = 99;
