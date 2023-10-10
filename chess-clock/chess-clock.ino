@@ -14,17 +14,21 @@
 #define ALERT_PIN 13
 
 // constants
-enum STATES { BEGIN,
-              READY,
-              W_PLAYING,
-              B_PLAYING,
-              W_PAUSED,
-              B_PAUSED,
-              W_END,
-              B_END,
-              BASE_TIME_CONFIG,
-              BONUS_TIME_CONFIG,
-              BONUS_METHOD_CONFIG };
+enum GAME_STATES { BEGIN,
+                   READY,
+                   W_PLAYING,
+                   B_PLAYING,
+                   W_PAUSED,
+                   B_PAUSED,
+                   W_END,
+                   B_END,
+                   BASE_TIME_CONFIG,
+                   BONUS_TIME_CONFIG,
+                   BONUS_METHOD_CONFIG };
+enum BLINK_STATES { NONE,
+                    DOTS_ONLY,
+                    TEXT_ONLY,
+                    FULL };
 const byte TIMER_SEG_CLEAR[] = {0x00, 0x00, 0x00, 0x00};
 const byte TIMER_SEG_LOSE[] = {
     SEG_D | SEG_E | SEG_F,
@@ -53,7 +57,8 @@ const byte BONUS_METHOD_OPTIONS[] = {
 const int NUM_BONUS_METHOD_OPTIONS = 2;
 
 // data
-STATES state_machine = STATES::BEGIN;
+GAME_STATES game_state_machine = GAME_STATES::BEGIN;
+BLINK_STATES display_state_machine = BLINK_STATES::NONE;
 int selected_base_time_pos = 4;
 int selected_bonus_time_pos = 0;
 int selected_bonus_method_pos = 0;
@@ -96,7 +101,8 @@ byte b_timer_data[] = {0xff, 0xff, 0xff, 0xff};
 // ISR for 'knob1 rotate' event
 void knob1_clk_event() {
     if (knob_input_enable) {
-        if (STATES::BASE_TIME_CONFIG == state_machine) {
+        switch (game_state_machine) {
+        case GAME_STATES::BASE_TIME_CONFIG:
             if (HIGH == digitalRead(KNOB1_DT_PIN)) { // if enc B pulse precedes enc A pulse
                 selected_base_time_pos++;
             } else { // if enc A pulse precedes enc B pulse
@@ -104,7 +110,8 @@ void knob1_clk_event() {
             }
 
             knob_input_enable = false; // block input till event is handled
-        } else if (STATES::BONUS_TIME_CONFIG == state_machine) {
+            break;
+        case GAME_STATES::BONUS_TIME_CONFIG:
             if (HIGH == digitalRead(KNOB1_DT_PIN)) { // if enc B pulse precedes enc A pulse
                 selected_bonus_time_pos++;
             } else { // if enc A pulse precedes enc B pulse
@@ -112,7 +119,8 @@ void knob1_clk_event() {
             }
 
             knob_input_enable = false; // block input till event is handled
-        } else if (STATES::BONUS_METHOD_CONFIG == state_machine) {
+            break;
+        case GAME_STATES::BONUS_METHOD_CONFIG:
             if (HIGH == digitalRead(KNOB1_DT_PIN)) { // if enc B pulse precedes enc A pulse
                 selected_bonus_method_pos++;
             } else { // if enc A pulse precedes enc B pulse
@@ -120,6 +128,9 @@ void knob1_clk_event() {
             }
 
             knob_input_enable = false; // block input till event is handled
+            break;
+        default:
+            break;
         }
     }
 }
@@ -144,8 +155,8 @@ void setup() {
 }
 
 // change STATE MACHINE states
-void change_state_to(STATES final_state) {
-    state_machine = final_state;
+void change_state_to(GAME_STATES final_state) {
+    game_state_machine = final_state;
 }
 
 // initialize game time limits
@@ -242,32 +253,32 @@ void loop() {
     black_move_button_state = digitalRead(BLACK_MOVE_PIN);
     mode_change_button_state = digitalRead(KNOB1_SW_PIN);
 
-    switch (state_machine) {
+    switch (game_state_machine) {
     default:
-    case STATES::BEGIN:
+    case GAME_STATES::BEGIN:
         init_time_limits();
-        change_state_to(STATES::READY);
+        change_state_to(GAME_STATES::READY);
         break;
 
-    case STATES::READY:
+    case GAME_STATES::READY:
         update_w_timer_display(w_time);
         update_b_timer_display(b_time);
 
         // start the game
         if (HIGH == start_pause_button_state && LOW == start_pause_button_prev_state) {
             init_timers();
-            change_state_to(STATES::W_PLAYING);
+            change_state_to(GAME_STATES::W_PLAYING);
         }
 
         // change mode
         if (HIGH == mode_change_button_state && LOW == mode_change_button_prev_state) {
             update_w_timer_display(selected_base_time);
             update_b_timer_display(selected_bonus_time, true, selected_bonus_method);
-            change_state_to(STATES::BASE_TIME_CONFIG);
+            change_state_to(GAME_STATES::BASE_TIME_CONFIG);
         }
         break;
 
-    case STATES::W_PLAYING:
+    case GAME_STATES::W_PLAYING:
         current_time = millis();
         // complete white move
         if (HIGH == white_move_button_state) {
@@ -280,7 +291,7 @@ void loop() {
                 w_total_time += min(play_duration, bonus_time);
             }
             w_time = w_total_time - (current_time - w_diff);
-            change_state_to(STATES::B_PLAYING);
+            change_state_to(GAME_STATES::B_PLAYING);
         } else {
             w_time = w_total_time - (current_time - w_diff);
         }
@@ -289,17 +300,17 @@ void loop() {
         // pause game at white move
         if (HIGH == start_pause_button_state && LOW == start_pause_button_prev_state) {
             pause_time = millis();
-            change_state_to(STATES::W_PAUSED);
+            change_state_to(GAME_STATES::W_PAUSED);
         }
 
         // white timeout => black wins
         if (w_time <= 0) {
             alert_start();
-            change_state_to(STATES::W_END);
+            change_state_to(GAME_STATES::W_END);
         }
         break;
 
-    case STATES::B_PLAYING:
+    case GAME_STATES::B_PLAYING:
         current_time = millis();
         // complete black move
         if (HIGH == black_move_button_state) {
@@ -312,7 +323,7 @@ void loop() {
                 b_total_time += min(play_duration, bonus_time);
             }
             b_time = b_total_time - (current_time - b_diff);
-            change_state_to(STATES::W_PLAYING);
+            change_state_to(GAME_STATES::W_PLAYING);
         } else {
             b_time = b_total_time - (current_time - b_diff);
         }
@@ -321,47 +332,47 @@ void loop() {
         // pause game at black move
         if (HIGH == start_pause_button_state && LOW == start_pause_button_prev_state) {
             pause_time = millis();
-            change_state_to(STATES::B_PAUSED);
+            change_state_to(GAME_STATES::B_PAUSED);
         }
 
         // black timeout => white wins
         if (b_time <= 0) {
             alert_start();
-            change_state_to(STATES::B_END);
+            change_state_to(GAME_STATES::B_END);
         }
         break;
 
-    case STATES::W_PAUSED:
+    case GAME_STATES::W_PAUSED:
         // unpause white move
         if (HIGH == start_pause_button_state && LOW == start_pause_button_prev_state) {
             current_time = millis();
             w_diff += current_time - pause_time;
-            change_state_to(STATES::W_PLAYING);
+            change_state_to(GAME_STATES::W_PLAYING);
         }
         break;
 
-    case STATES::B_PAUSED:
+    case GAME_STATES::B_PAUSED:
         // unpause black move
         if (HIGH == start_pause_button_state && LOW == start_pause_button_prev_state) {
             current_time = millis();
             b_diff += current_time - pause_time;
-            change_state_to(STATES::B_PLAYING);
+            change_state_to(GAME_STATES::B_PLAYING);
         }
         break;
 
-    case STATES::W_END:
+    case GAME_STATES::W_END:
         // print white lose message
         w_timer_display.setSegments(TIMER_SEG_END);
         alert_stop();
         break;
 
-    case STATES::B_END:
+    case GAME_STATES::B_END:
         // print black lose message
         b_timer_display.setSegments(TIMER_SEG_END);
         alert_stop();
         break;
 
-    case STATES::BASE_TIME_CONFIG:
+    case GAME_STATES::BASE_TIME_CONFIG:
         if (!knob_input_enable) {
             // circular indices
             if (selected_base_time_pos >= NUM_BASE_TIME_OPTIONS) { // handle overflow
@@ -377,11 +388,11 @@ void loop() {
 
         // change mode
         if (HIGH == mode_change_button_state && LOW == mode_change_button_prev_state) {
-            change_state_to(STATES::BONUS_TIME_CONFIG);
+            change_state_to(GAME_STATES::BONUS_TIME_CONFIG);
         }
         break;
 
-    case STATES::BONUS_TIME_CONFIG:
+    case GAME_STATES::BONUS_TIME_CONFIG:
         if (!knob_input_enable) {
             // circular indices
             if (selected_bonus_time_pos >= NUM_BONUS_TIME_OPTIONS) { // handle overflow
@@ -397,11 +408,11 @@ void loop() {
 
         // change mode
         if (HIGH == mode_change_button_state && LOW == mode_change_button_prev_state) {
-            change_state_to(STATES::BONUS_METHOD_CONFIG);
+            change_state_to(GAME_STATES::BONUS_METHOD_CONFIG);
         }
         break;
 
-    case STATES::BONUS_METHOD_CONFIG:
+    case GAME_STATES::BONUS_METHOD_CONFIG:
         if (!knob_input_enable) {
             // circular indices
             if (selected_bonus_method_pos >= NUM_BONUS_METHOD_OPTIONS) { // handle overflow
@@ -418,7 +429,7 @@ void loop() {
         // change mode
         if (HIGH == mode_change_button_state && LOW == mode_change_button_prev_state) {
             init_time_limits();
-            change_state_to(STATES::READY);
+            change_state_to(GAME_STATES::READY);
         }
         break;
     }
