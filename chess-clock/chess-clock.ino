@@ -36,12 +36,12 @@ const byte TIMER_SEG_END[] = {
     SEG_C | SEG_E | SEG_G,
     SEG_B | SEG_C | SEG_D | SEG_E | SEG_G,
     0x00};
-const unsigned long ALERT_DURATION = 1000;
-const unsigned long BASE_TIME_OPTIONS[] = { // all time measured in milliseconds
+const long ALERT_DURATION = 1000;
+const long BASE_TIME_OPTIONS[] = { // all time measured in milliseconds
     60000, 120000, 180000, 300000, 600000, 900000,
     1200000, 1800000, 2700000, 3600000, 4500000, 5400000};
 const int NUM_BASE_TIME_OPTIONS = 12;
-const unsigned long BONUS_TIME_OPTIONS[] = {
+const long BONUS_TIME_OPTIONS[] = {
     0, 1000, 2000, 3000, 5000, 10000, 15000,
     20000, 30000, 45000, 60000, 75000};
 const int NUM_BONUS_TIME_OPTIONS = 12;
@@ -57,24 +57,24 @@ STATES state_machine = STATES::BEGIN;
 int selected_base_time_pos = 4;
 int selected_bonus_time_pos = 0;
 int selected_bonus_method_pos = 0;
-unsigned long selected_base_time = BASE_TIME_OPTIONS[selected_base_time_pos];
-unsigned long selected_bonus_time = BONUS_TIME_OPTIONS[selected_bonus_time_pos];
+long selected_base_time = BASE_TIME_OPTIONS[selected_base_time_pos];
+long selected_bonus_time = BONUS_TIME_OPTIONS[selected_bonus_time_pos];
 byte selected_bonus_method = BONUS_METHOD_OPTIONS[selected_bonus_method_pos];
-unsigned long current_time = 0;
-unsigned long w_total_time = 0;
-unsigned long b_total_time = 0;
-unsigned long bonus_time = 0;
+long current_time = 0;
+long w_total_time = 0;
+long b_total_time = 0;
+long bonus_time = 0;
 byte bonus_method = 0;
-unsigned long w_time = 0;
-unsigned long b_time = 0;
+long w_time = 0;
+long b_time = 0;
 byte w_moves = 0;
 byte b_moves = 0;
-unsigned long w_diff = 0;
-unsigned long b_diff = 0;
-unsigned long pause_time = 0;
-unsigned long play_time = 0;
-unsigned long play_duration = 0;
-unsigned long alert_time = 0;
+long w_diff = 0;
+long b_diff = 0;
+long pause_time = 0;
+long play_time = 0;
+long play_duration = 0;
+long alert_time = 0;
 
 // input states
 int start_pause_button_state = LOW;
@@ -189,8 +189,8 @@ void convert_time_to_clock(long time, byte clock[]) {
         time = 0;
     }
 
-    unsigned long minute = (time / 1000) / 60;
-    unsigned long second = (time / 1000) % 60;
+    long minute = (time / 1000) / 60;
+    long second = (time / 1000) % 60;
 
     if (minute > 99) { // TODO: fix this temporary hack
         minute = 99;
